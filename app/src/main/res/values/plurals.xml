@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <plurals name="trash_days_left">
+        <item quantity="zero">يُحذف نهائيًا اليوم</item>
+        <item quantity="one">يُحذف نهائيًا خلال يوم واحد</item>
+        <item quantity="two">يُحذف نهائيًا خلال يومين</item>
+        <item quantity="few">يُحذف نهائيًا خلال %d أيام</item>
+        <item quantity="many">يُحذف نهائيًا خلال %d يومًا</item>
+        <item quantity="other">يُحذف نهائيًا خلال %d يوم</item>
+    </plurals>
+</resources>

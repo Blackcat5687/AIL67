@@ -1,0 +1,34 @@
+<resources>
+    <color name="white">#FFFFFFFF</color>
+    <color name="black">#FF000000</color>
+
+    <color name="purple_500">#FF6750A4</color>
+    <color name="background_dark">#FF121212</color>
+    <color name="surface_dark">#FF1E1E1E</color>
+    <color name="on_surface_dark">#FFE6E1E5</color>
+
+    <!-- note card palette, index 0 = default -->
+    <color name="note_0">#FF2B2B2B</color>
+    <color name="note_1">#FF5C2B29</color>
+    <color name="note_2">#FF614A19</color>
+    <color name="note_3">#FF635D19</color>
+    <color name="note_4">#FF345920</color>
+    <color name="note_5">#FF16504B</color>
+    <color name="note_6">#FF2D555E</color>
+    <color name="note_7">#FF42275E</color>
+    <color name="note_8">#FF5B2245</color>
+    <color name="note_9">#FF442F19</color>
+
+    <!-- graph node colors -->
+    <color name="graph_note_node">#FFE6E1E5</color>
+    <color name="graph_tag_node">#FF4CAF50</color>
+    <color name="graph_label_node">#FFE8A33D</color>
+    <color name="graph_edge">#FF5A5A5A</color>
+
+    <!-- inline #tag highlight inside the note editor -->
+    <color name="tag_highlight">#FF8AB4F8</color>
+    <!-- scrim behind text when a note has a background image -->
+    <color name="card_image_scrim">#66000000</color>
+    <color name="pin_active">#FFE6E1E5</color>
+    <color name="pin_inactive">#99E6E1E5</color>
+</resources>

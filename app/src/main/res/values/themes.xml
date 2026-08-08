@@ -1,0 +1,18 @@
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <style name="Theme.NotesLink" parent="Theme.Material3.DayNight.NoActionBar">
+        <item name="colorPrimary">@color/purple_500</item>
+        <item name="colorOnPrimary">@color/white</item>
+        <item name="android:windowBackground">@color/background_dark</item>
+        <item name="colorSurface">@color/surface_dark</item>
+        <item name="colorOnSurface">@color/on_surface_dark</item>
+        <item name="android:statusBarColor" tools:targetApi="21">@color/background_dark</item>
+    </style>
+
+    <!-- Shown briefly on cold launch: the app icon centered on a plain black background at its
+         normal (non-stretched) size, as opposed to no icon showing at all before. -->
+    <style name="Theme.NotesLink.Splash" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/black</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/splash_icon</item>
+        <item name="postSplashScreenTheme">@style/Theme.NotesLink</item>
+    </style>
+</resources>

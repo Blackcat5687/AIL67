@@ -1,0 +1,1642 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Force-Directed Graph View</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    width: 100%; height: 100%; overflow: hidden;
+    background: #0a0e14;
+    font-family: 'Segoe UI', Tahoma, Arial, sans-serif;
+    -webkit-user-select: none; user-select: none;
+  }
+  #graphCanvas {
+    display: block; width: 100vw; height: 100vh;
+    cursor: grab; touch-action: none;
+  }
+  #graphCanvas.dragging { cursor: grabbing; }
+
+  .toolbar-btn {
+    width: 44px; height: 44px; border-radius: 10px;
+    border: 1px solid rgba(255,255,255,0.12);
+    background: rgba(20,24,32,0.85); color: #e2e8f0;
+    font-size: 20px; line-height: 1; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    backdrop-filter: blur(6px);
+    transition: background .15s, transform .1s;
+  }
+  .toolbar-btn:hover { background: rgba(45,52,66,0.95); }
+  .toolbar-btn:active { transform: scale(0.92); }
+
+  #settingsToggle {
+    position: fixed; top: 16px; left: 16px; z-index: 11;
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* لوحة الإعدادات                                                     */
+  /* ------------------------------------------------------------------ */
+  #settingsPanel {
+    position: fixed; top: 72px; left: 16px;
+    width: 320px; max-width: calc(100vw - 32px);
+    max-height: calc(100vh - 96px);
+    overflow: hidden;
+    background: rgba(15,18,26,0.94);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 14px;
+    color: #e2e8f0; z-index: 10;
+    backdrop-filter: blur(10px);
+    transition: transform .25s ease, opacity .2s ease;
+    transform-origin: top left;
+    display: flex; flex-direction: column;
+  }
+  #settingsPanel.closed {
+    transform: translateX(-30px) scale(0.96);
+    opacity: 0; pointer-events: none;
+  }
+
+  .panel-header {
+    display: flex; align-items: center; gap: 10px;
+    padding: 14px 16px; flex: 0 0 auto;
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+  }
+  .panel-header .title {
+    font-size: 14px; font-weight: 700; color: #e2e8f0; flex: 1;
+  }
+  .close-btn {
+    width: 28px; height: 28px; border-radius: 8px;
+    border: none; background: rgba(255,255,255,0.06); color: #cbd5e1;
+    font-size: 16px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .close-btn:hover { background: rgba(248,113,113,0.18); color: #f87171; }
+
+  .panel-body {
+    overflow-y: auto; padding: 12px 16px 16px;
+    flex: 1 1 auto;
+  }
+
+  /* -------------------- القائمة المنسدلة (أكورديون) -------------------- */
+  .menu-list { display: flex; flex-direction: column; gap: 6px; }
+  .accordion-item { margin-bottom: 6px; }
+  .accordion-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 13px 12px; border-radius: 10px;
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(255,255,255,0.06);
+    cursor: pointer; font-size: 13.5px; color: #e2e8f0;
+    transition: background .15s;
+  }
+  .accordion-header:hover { background: rgba(255,255,255,0.07); }
+  .accordion-item.open .accordion-header {
+    border-bottom-left-radius: 0; border-bottom-right-radius: 0;
+  }
+  .accordion-header .arrow { color: #6b7787; font-size: 13px; }
+  .accordion-body {
+    padding: 14px 12px; border-radius: 0 0 10px 10px;
+    background: rgba(255,255,255,0.015);
+    border: 1px solid rgba(255,255,255,0.06); border-top: none;
+  }
+
+  h4.section-label {
+    font-size: 11.5px; font-weight: 700; color: #7fa0d6;
+    margin: 14px 0 8px; text-transform: uppercase; letter-spacing: .03em;
+  }
+  h4.section-label:first-child { margin-top: 0; }
+
+  .slider-row { margin-bottom: 14px; }
+  .slider-row label {
+    display: flex; justify-content: space-between;
+    font-size: 12.5px; color: #cbd5e1; margin-bottom: 6px;
+  }
+  .slider-row .val {
+    color: #4ade80; font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+  input[type=range] {
+    width: 100%; height: 20px; accent-color: #4ade80;
+    background: transparent; cursor: pointer;
+  }
+
+  .toggle-row {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 10px 12px; margin-bottom: 6px; font-size: 12.5px; color: #cbd5e1;
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 10px;
+  }
+  .switch { position: relative; width: 40px; height: 22px; flex: 0 0 auto; }
+  .switch input { opacity: 0; width: 0; height: 0; }
+  .switch .track {
+    position: absolute; inset: 0; background: rgba(255,255,255,0.14);
+    border-radius: 999px; cursor: pointer; transition: background .15s;
+  }
+  .switch .track::before {
+    content: ''; position: absolute; width: 16px; height: 16px;
+    left: 3px; top: 3px; background: #cbd5e1; border-radius: 50%;
+    transition: transform .15s, background .15s;
+  }
+  .switch input:checked + .track { background: #2f7d4f; }
+  .switch input:checked + .track::before { transform: translateX(18px); background: #4ade80; }
+
+  .field-label {
+    font-size: 12px; color: #94a3b8; margin-bottom: 5px; display: block;
+  }
+  .text-input {
+    width: 100%; padding: 9px 10px; border-radius: 8px;
+    border: 1px solid rgba(255,255,255,0.12); background: rgba(255,255,255,0.04);
+    color: #e2e8f0; font-size: 13px; font-family: inherit;
+    margin-bottom: 10px;
+  }
+  .text-input::placeholder { color: #566178; }
+  .text-input:focus { outline: none; border-color: #4ade80; }
+
+  .hint-text { font-size: 11px; color: #64748b; line-height: 1.6; margin-bottom: 10px; }
+
+  .primary-btn {
+    width: 100%; padding: 10px; border-radius: 9px; border: none;
+    background: #2f7d4f; color: #eafff2; font-size: 13px; font-weight: 600;
+    cursor: pointer; margin-top: 4px;
+  }
+  .primary-btn:hover { background: #368a58; }
+  .secondary-btn {
+    width: 100%; padding: 9px; border-radius: 9px;
+    border: 1px solid rgba(255,255,255,0.14); background: transparent;
+    color: #cbd5e1; font-size: 12.5px; cursor: pointer; margin-top: 6px;
+  }
+  .secondary-btn:hover { background: rgba(255,255,255,0.06); }
+
+  /* -------------------- قواعد المجموعات -------------------- */
+  .rule-card {
+    border: 1px solid rgba(255,255,255,0.08); border-radius: 10px;
+    padding: 10px; margin-bottom: 10px; background: rgba(255,255,255,0.02);
+  }
+  .rule-card-top {
+    display: flex; align-items: center; gap: 8px; margin-bottom: 8px;
+  }
+  .rule-swatch {
+    width: 20px; height: 20px; border-radius: 6px; flex: 0 0 auto;
+    border: 1px solid rgba(255,255,255,0.2);
+  }
+  .rule-query {
+    flex: 1; font-size: 12.5px; color: #e2e8f0;
+    font-family: 'Consolas', monospace; direction: ltr; text-align: left;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .rule-del {
+    width: 24px; height: 24px; border-radius: 7px; border: none;
+    background: rgba(248,113,113,0.12); color: #f87171; cursor: pointer;
+    font-size: 13px; flex: 0 0 auto;
+  }
+  .rule-del:hover { background: rgba(248,113,113,0.25); }
+  .rule-edit-hint { font-size: 10.5px; color: #566178; }
+
+  /* -------------------- منتقي الألوان -------------------- */
+  .color-picker-wrap {
+    border: 1px solid rgba(255,255,255,0.08); border-radius: 10px;
+    padding: 12px; margin: 10px 0; background: rgba(255,255,255,0.02);
+  }
+  .swatch-grid {
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px;
+    margin-bottom: 10px;
+  }
+  .swatch-btn {
+    aspect-ratio: 1; border-radius: 9px; cursor: pointer;
+    border: 2px solid transparent; position: relative;
+  }
+  .swatch-btn.active { border-color: #fff; }
+  .swatch-btn.custom-trigger {
+    display: flex; align-items: center; justify-content: center;
+    background: conic-gradient(red, yellow, lime, cyan, blue, magenta, red);
+    font-size: 15px; color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,0.6);
+  }
+
+  .hsv-box {
+    position: relative; width: 100%; aspect-ratio: 1.6; border-radius: 8px;
+    overflow: hidden; cursor: crosshair; touch-action: none;
+    margin-bottom: 10px;
+  }
+  .hsv-box .sat-layer {
+    position: absolute; inset: 0;
+    background: linear-gradient(to right, #fff, transparent);
+  }
+  .hsv-box .val-layer {
+    position: absolute; inset: 0;
+    background: linear-gradient(to top, #000, transparent);
+  }
+  .hsv-cursor {
+    position: absolute; width: 14px; height: 14px; border-radius: 50%;
+    border: 2px solid #fff; box-shadow: 0 0 0 1px rgba(0,0,0,0.5);
+    transform: translate(-50%, -50%); pointer-events: none;
+  }
+  .hue-slider {
+    -webkit-appearance: none; appearance: none;
+    width: 100%; height: 14px; border-radius: 999px; margin-bottom: 12px;
+    background: linear-gradient(to right, red, yellow, lime, cyan, blue, magenta, red);
+    cursor: pointer;
+  }
+  .hue-slider::-webkit-slider-thumb {
+    -webkit-appearance: none; width: 18px; height: 18px; border-radius: 50%;
+    background: #fff; border: 2px solid #222; cursor: pointer;
+  }
+  .hue-slider::-moz-range-thumb {
+    width: 18px; height: 18px; border-radius: 50%;
+    background: #fff; border: 2px solid #222; cursor: pointer;
+  }
+
+  .picker-preview-row { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+  .picker-preview {
+    width: 40px; height: 40px; border-radius: 9px; flex: 0 0 auto;
+    border: 1px solid rgba(255,255,255,0.2);
+  }
+  .picker-hex { font-size: 12.5px; color: #cbd5e1; font-family: 'Consolas', monospace; direction: ltr; }
+
+  .picker-actions { display: flex; gap: 8px; }
+  .picker-actions button { flex: 1; }
+  .btn-confirm {
+    padding: 9px; border-radius: 8px; border: none;
+    background: #2f7d4f; color: #eafff2; font-size: 12.5px; font-weight: 600; cursor: pointer;
+  }
+  .btn-cancel {
+    padding: 9px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.14);
+    background: transparent; color: #cbd5e1; font-size: 12.5px; cursor: pointer;
+  }
+
+  #hint {
+    position: fixed; bottom: 12px; right: 16px;
+    font-size: 11px; color: rgba(226,232,240,0.35);
+    z-index: 5; pointer-events: none; text-align: left;
+    line-height: 1.6;
+  }
+</style>
+</head>
+<body>
+
+<canvas id="graphCanvas"></canvas>
+
+<button id="settingsToggle" class="toolbar-btn" title="الإعدادات">⚙</button>
+
+<div id="settingsPanel" class="closed">
+  <div class="panel-header">
+    <div class="title" id="panelTitle">الإعدادات</div>
+    <button class="close-btn" id="panelCloseBtn">×</button>
+  </div>
+  <div class="panel-body" id="panelBody"><!-- يُملأ ديناميكيًا --></div>
+</div>
+
+<div id="hint">اسحب عقدة لتحريكها · اسحب المساحة الفارغة للتنقل · عجلة الماوس للتكبير</div>
+
+<script>
+(function () {
+  'use strict';
+
+  // ------------------------------------------------------------------
+  // بيانات العقد والعلاقات — تصل من تطبيق Android عبر NotesLinkGraph.loadData()
+  // ------------------------------------------------------------------
+  // كل عقدة: { id, title, tags[], path, file, properties{}, ... }
+  // كل رابط: { source, target, direction }  (direction: 'forward' | 'backward' | 'none')
+  //
+  // لا توجد بيانات تجريبية هنا بعد الآن — Kotlin هو مصدر الحقيقة الوحيد للبيانات،
+  // ويرسلها عبر الجسر (window.NotesLinkGraph.loadData) بعد تحميل هذه الصفحة.
+
+  const HUB_DEGREE_THRESHOLD = 5; // العقد ذات الدرجة >= هذا الرقم تُلوَّن كعقد مركزية افتراضيًا
+
+  // ------------------------------------------------------------------
+  // ثوابت الفيزياء (قابلة للتعديل هنا إذا رغبت بإعادة معايرة السلوك)
+  // ------------------------------------------------------------------
+  const REPULSION_K = 0.5;      // معامل قوة التنافر بعيد المدى (تربيعي عكسي)
+  const REPULSION_NEAR_K = 1.6; // معامل الدفع الإضافي القريب (منع التداخل البصري)
+  const MAX_PAIR_FORCE = 34;    // أقصى قوة تنافر لكل زوج عقد في اللقطة الواحدة
+  const MAX_SPRING_FORCE = 30;  // أقصى قوة للرابط الواحد في اللقطة الواحدة
+  const CENTER_K = 0.02;        // معامل تحويل "قوة الوسط" (0-1) إلى تسارع فعلي
+  const DEGREE_SHRINK_CAP = 0.5;// أقصى نسبة تقصير لطول الرابطة بسبب تأثير الدرجة
+  const VELOCITY_DECAY = 0.88;  // تخميد السرعة في كل لقطة
+  const MAX_VELOCITY = 30;      // الحد الأقصى لسرعة أي عقدة في اللقطة الواحدة (شبكة الأمان النهائية)
+  const ALPHA_MIN = 0.001;
+  const ALPHA_DECAY = 1 - Math.pow(ALPHA_MIN, 1 / 400); // ~400 لقطة للاستقرار
+  const MIN_SCALE = 0.12;
+  const MAX_SCALE = 6;
+  const CLUSTER_PULL_K = 0.012; // معامل قوة تقريب المكونات المنفصلة عند تجاوز أقصى مسافة
+
+  function clamp(v, lo, hi) { return Math.min(hi, Math.max(lo, v)); }
+
+  // ------------------------------------------------------------------
+  // بناء العقد والعلاقات
+  // ------------------------------------------------------------------
+  const canvas = document.getElementById('graphCanvas');
+  const ctx = canvas.getContext('2d');
+  let dpr = window.devicePixelRatio || 1;
+
+  // nodes/edges/nodesById/maxDegree تُعاد بناؤها بالكامل داخل buildGraphFromData()
+  // في كل مرة يرسل Kotlin بيانات جديدة أو محدَّثة، دون تغيير أي مرجع آخر في الملف
+  // (بقية الكود يقرأ هذه المتغيرات نفسها عبر الإغلاق/closure، فتحديث محتواها هنا كافٍ).
+  let nodes = [];
+  let nodesById = {};
+  let edges = [];
+  let maxDegree = 0;
+
+  /**
+   * يبني نموذج الرسم البياني من بيانات حقيقية قادمة من Kotlin.
+   * data = {
+   *   nodes: [ { id, title, tags[], path, file, properties{} }, ... ],
+   *   edges: [ { source, target, direction }, ... ],
+   *   positions: { [id]: {x, y} }   // اختياري - مواقع محفوظة سابقًا لعقد موجودة
+   * }
+   * يحافظ على موضع/سرعة أي عقدة كانت موجودة مسبقًا في الرسم الحالي (بمعرفها) بدل
+   * إعادة توزيعها عشوائيًا من جديد، حتى لا يقفز الرسم عند كل تحديث بسيط للبيانات.
+   */
+  function buildGraphFromData(data) {
+    const incomingNodes = (data && data.nodes) || [];
+    const incomingEdges = (data && data.edges) || [];
+    const savedPositions = (data && data.positions) || {};
+
+    const previousById = nodesById;
+    const newNodes = [];
+    const newNodesById = {};
+
+    incomingNodes.forEach(function (raw) {
+      const id = String(raw.id);
+      const prev = previousById[id];
+      const savedPos = savedPositions[id];
+      let x, y;
+      if (prev) {
+        x = prev.x; y = prev.y;
+      } else if (savedPos) {
+        x = savedPos.x; y = savedPos.y;
+      } else {
+        // موقع ابتدائي عشوائي مبعثر - الفيزياء تتولى الباقي فور بدء التشغيل
+        const angle = Math.random() * Math.PI * 2;
+        const radius = 60 + Math.random() * 260;
+        x = Math.cos(angle) * radius + (Math.random() - 0.5) * 40;
+        y = Math.sin(angle) * radius + (Math.random() - 0.5) * 40;
+      }
+      const node = {
+        id: id,
+        title: raw.title || '',
+        x: x, y: y,
+        vx: prev ? prev.vx : 0,
+        vy: prev ? prev.vy : 0,
+        degree: 0,
+        dragging: false,
+        tags: raw.tags || [],
+        path: raw.path || '',
+        file: raw.file || '',
+        properties: raw.properties || {},
+        hasAttachment: !!raw.hasAttachment,
+        fileExists: raw.fileExists,
+        noteId: raw.noteId != null ? raw.noteId : raw.id,
+        isGhost: !!raw.isGhost,
+        // حالة محسوبة لكل لقطة إعدادات/فلتر (لا تُعتبر بيانات أصلية)
+        _visible: true,
+        _color: null,
+        _component: -1
+      };
+      newNodes.push(node);
+      newNodesById[id] = node;
+    });
+
+    const newEdges = incomingEdges.map(function (e) {
+      const a = newNodesById[String(e.source)];
+      const b = newNodesById[String(e.target)];
+      if (a) a.degree++;
+      if (b) b.degree++;
+      return { source: String(e.source), target: String(e.target), direction: e.direction || 'none' };
+    }).filter(function (e) { return newNodesById[e.source] && newNodesById[e.target]; });
+
+    let newMaxDegree = 0;
+    newNodes.forEach(function (n) { if (n.degree > newMaxDegree) newMaxDegree = n.degree; });
+    newNodes.forEach(function (n) { n.isOrphan = n.degree === 0; });
+
+    nodes = newNodes;
+    nodesById = newNodesById;
+    edges = newEdges;
+    maxDegree = newMaxDegree;
+
+    componentCount = computeComponents();
+    recomputeDerivedState();
+    reheat(1);
+  }
+
+  // ------------------------------------------------------------------
+  // الإعدادات
+  // ------------------------------------------------------------------
+  const settings = {
+    // عرض
+    nodeSize: 12,
+    linkWidth: 2,
+    linkDistance: 100,
+    linkStrength: 0.7,
+    repulsionDistance: 80,
+    centerForce: 0.4,
+    degreeInfluence: 0.6,
+    showArrows: false,
+    labelFadeLimit: 0.55,   // حد تلاشي النص (بمقياس الـ zoom scale)
+    maxClusterDistance: 1500 // أكبر مسافة ممكنة بين المكونات المنفصلة (world units)
+  };
+
+  // ------------------------------------------------------------------
+  // نظام الفلترة (مستقل تمامًا عن نظام تلوين المجموعات)
+  // ------------------------------------------------------------------
+  const filterState = {
+    query: '',
+    showTags: true,
+    showAttachments: true,
+    onlyExisting: false,
+    showOrphans: true
+  };
+
+  // ------------------------------------------------------------------
+  // نظام المجموعات (قواعد تلوين)
+  // ------------------------------------------------------------------
+  const PRESET_COLORS = ['#ef4444', '#3b82f6', '#22c55e', '#eab308', '#a855f7', '#ec4899', '#111318', '#f8fafc'];
+  let groupRules = [
+    { id: 'g1', query: 'tag:programming', color: '#3b82f6' },
+    { id: 'g2', query: 'tag:important', color: '#ef4444' }
+  ];
+  let ruleIdCounter = 3;
+
+  // ------------------------------------------------------------------
+  // محرك الاستعلامات المشترك (يُستخدم في الفلترة وفي قواعد المجموعات)
+  // صيغة الاستعلام: "نوع:قيمة" مثل path:Projects أو tag:important
+  // بدون بادئة نوع → يُبحث كنص حر في tag/title/path/file
+  // ------------------------------------------------------------------
+  function parseQuery(raw) {
+    const q = (raw || '').trim();
+    if (!q) return null;
+    const m = q.match(/^([a-zA-Z_]+):(.*)$/);
+    if (m) {
+      return { type: m[1].toLowerCase(), value: m[2].trim().toLowerCase() };
+    }
+    return { type: 'text', value: q.toLowerCase() };
+  }
+
+  function nodeMatchesQuery(node, parsed) {
+    if (!parsed) return true;
+    const val = parsed.value;
+    switch (parsed.type) {
+      case 'path':
+        return node.path.toLowerCase().indexOf(val) !== -1;
+      case 'file':
+        return node.file.toLowerCase().indexOf(val) !== -1;
+      case 'tag':
+        return node.tags.some(function (t) { return t.toLowerCase().indexOf(val) !== -1; });
+      case 'line':
+      case 'section':
+        // نص حر تجريبي: نبحث ضمن العنوان كتمثيل مؤقت لمحتوى السطر/القسم
+        return node.title.toLowerCase().indexOf(val) !== -1;
+      case 'text':
+        return node.title.toLowerCase().indexOf(val) !== -1 ||
+               node.tags.some(function (t) { return t.toLowerCase().indexOf(val) !== -1; }) ||
+               node.path.toLowerCase().indexOf(val) !== -1;
+      default:
+        // [property]:value → مطابقة خاصية مخصصة
+        if (node.properties && Object.prototype.hasOwnProperty.call(node.properties, parsed.type)) {
+          return String(node.properties[parsed.type]).toLowerCase().indexOf(val) !== -1;
+        }
+        return false;
+    }
+  }
+
+  // ------------------------------------------------------------------
+  // إعادة حساب الظهور (فلترة) ولون كل عقدة (مجموعات) - مستقلان تمامًا
+  // ------------------------------------------------------------------
+  function recomputeFilter() {
+    const parsed = parseQuery(filterState.query);
+    for (let i = 0; i < nodes.length; i++) {
+      const n = nodes[i];
+      let visible = nodeMatchesQuery(n, parsed);
+      if (visible && !filterState.showAttachments && n.hasAttachment) visible = false;
+      if (visible && !filterState.showTags && n.tags.length > 0) visible = false;
+      if (visible && filterState.onlyExisting && !n.fileExists && n.fileExists !== undefined) visible = false;
+      if (visible && !filterState.showOrphans && n.isOrphan) visible = false;
+      n._visible = visible;
+    }
+  }
+
+  function recomputeGroupColors() {
+    for (let i = 0; i < nodes.length; i++) {
+      const n = nodes[i];
+      let color = null;
+      // آخر قاعدة مطابقة في الترتيب تفوز، بحيث يمكن للمستخدم وضع قواعد أكثر تحديدًا لاحقًا في القائمة
+      for (let r = 0; r < groupRules.length; r++) {
+        const parsed = parseQuery(groupRules[r].query);
+        if (nodeMatchesQuery(n, parsed)) color = groupRules[r].color;
+      }
+      n._color = color;
+    }
+  }
+
+  function recomputeDerivedState() {
+    recomputeFilter();
+    recomputeGroupColors();
+  }
+
+  // ------------------------------------------------------------------
+  // اكتشاف المكونات المتصلة (لضبط "أكبر مسافة ممكنة بين العقد" بين الجزر المنفصلة)
+  // يُعاد حسابه فقط عند تغيّر بنية الروابط (ثابتة هنا)، وليس كل لقطة
+  // ------------------------------------------------------------------
+  function computeComponents() {
+    const visited = {};
+    let compId = 0;
+    const adj = {};
+    nodes.forEach(function (n) { adj[n.id] = []; });
+    edges.forEach(function (e) {
+      adj[e.source].push(e.target);
+      adj[e.target].push(e.source);
+    });
+    nodes.forEach(function (n) {
+      if (visited[n.id]) return;
+      const stack = [n.id];
+      visited[n.id] = true;
+      const members = [];
+      while (stack.length) {
+        const cur = stack.pop();
+        members.push(cur);
+        adj[cur].forEach(function (nb) {
+          if (!visited[nb]) { visited[nb] = true; stack.push(nb); }
+        });
+      }
+      members.forEach(function (id) { nodesById[id]._component = compId; });
+      compId++;
+    });
+    return compId;
+  }
+  let componentCount = computeComponents();
+
+  // ------------------------------------------------------------------
+  // حالة العرض (Zoom / Pan)
+  // ------------------------------------------------------------------
+  const view = { scale: 1, offsetX: 0, offsetY: 0 };
+
+  // ------------------------------------------------------------------
+  // حالة المحاكاة
+  // ------------------------------------------------------------------
+  let alpha = 1;
+  let draggingNode = null;
+  let isPanning = false;
+  let panStart = null;
+
+  function reheat(a) {
+    alpha = Math.max(alpha, a);
+  }
+
+  function anyDragging() {
+    return draggingNode !== null;
+  }
+
+  // ------------------------------------------------------------------
+  // حساب القوى
+  // ------------------------------------------------------------------
+  function applyForces() {
+    for (let i = 0; i < nodes.length; i++) {
+      nodes[i].fx_ = 0;
+      nodes[i].fy_ = 0;
+    }
+
+    // 1) قوة الصد بين كل زوج من العقد الظاهرة (تتدرج مع المسافة، وليست شرط Boolean)
+    const R = settings.repulsionDistance;
+    const nodeR = settings.nodeSize;
+    const minGap = nodeR * 2 + 6;
+
+    for (let i = 0; i < nodes.length; i++) {
+      if (!nodes[i]._visible) continue;
+      for (let j = i + 1; j < nodes.length; j++) {
+        if (!nodes[j]._visible) continue;
+        const a = nodes[i], b = nodes[j];
+        let dx = b.x - a.x, dy = b.y - a.y;
+        let dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist < 0.0001) {
+          dx = (Math.random() - 0.5) * 0.02;
+          dy = (Math.random() - 0.5) * 0.02;
+          dist = 0.01;
+        }
+        const minSep = Math.max(2, dist);
+
+        // تنافر بعيد المدى (تربيعي عكسي) - يتدرج تلقائيًا مع المسافة
+        let forceMag = (R * R * REPULSION_K) / (minSep * minSep);
+
+        // دفع إضافي قريب المدى يمنع التداخل البصري بين العقد
+        if (dist < minGap) {
+          forceMag += (minGap - dist) * REPULSION_NEAR_K;
+        }
+        forceMag = Math.min(forceMag, MAX_PAIR_FORCE);
+
+        const fx = (dx / dist) * forceMag * alpha;
+        const fy = (dy / dist) * forceMag * alpha;
+        a.fx_ -= fx; a.fy_ -= fy;
+        b.fx_ += fx; b.fy_ += fy;
+      }
+    }
+
+    // 2) قوة الرابط (Spring) + تأثير عدد العلاقات (محلي على الروابط فقط)
+    for (let k = 0; k < edges.length; k++) {
+      const e = edges[k];
+      const a = nodesById[e.source], b = nodesById[e.target];
+      if (!a._visible || !b._visible) continue;
+      let dx = b.x - a.x, dy = b.y - a.y;
+      let dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist < 0.0001) { dist = 0.01; dx = 0.01; dy = 0; }
+
+      // تطبيع الدرجة (0 إلى 1) لكل طرف من طرفي هذه الرابطة فقط
+      const normA = maxDegree > 0 ? a.degree / maxDegree : 0;
+      const normB = maxDegree > 0 ? b.degree / maxDegree : 0;
+      const avgNorm = (normA + normB) / 2;
+
+      // تأثير الدرجة يُترجم إلى تقصير محدود (مُطبَّق بحد أقصى) لطول الرابطة المستهدف
+      const shrink = settings.degreeInfluence * avgNorm * DEGREE_SHRINK_CAP;
+      const targetDist = settings.linkDistance * (1 - shrink);
+
+      const diff = dist - targetDist;
+      let forceMag = diff * settings.linkStrength * alpha;
+      forceMag = clamp(forceMag, -MAX_SPRING_FORCE, MAX_SPRING_FORCE);
+
+      const fx = (dx / dist) * forceMag;
+      const fy = (dy / dist) * forceMag;
+      a.fx_ += fx; a.fy_ += fy;
+      b.fx_ -= fx; b.fy_ -= fy;
+    }
+
+    // 3) قوة الوسط - ضعيفة، تُبقي الشبكة متجمعة دون أن تنهار في نقطة واحدة
+    let cx = 0, cy = 0, visCount = 0;
+    for (let i = 0; i < nodes.length; i++) {
+      if (!nodes[i]._visible) continue;
+      cx += nodes[i].x; cy += nodes[i].y; visCount++;
+    }
+    if (visCount > 0) { cx /= visCount; cy /= visCount; }
+
+    for (let i = 0; i < nodes.length; i++) {
+      const n = nodes[i];
+      if (!n._visible) continue;
+      n.fx_ += -(n.x - cx) * settings.centerForce * CENTER_K * alpha;
+      n.fy_ += -(n.y - cy) * settings.centerForce * CENTER_K * alpha;
+    }
+
+    // 4) أكبر مسافة ممكنة بين العقد: تُطبَّق فقط بين مراكز المكونات المنفصلة
+    // (جزر لا يربطها أي مسار)، ولا تفرض حدًا على كل زوج عقد داخل نفس المكوّن
+    if (componentCount > 1) {
+      applyClusterDistanceLimit();
+    }
+  }
+
+  function applyClusterDistanceLimit() {
+    const maxDist = settings.maxClusterDistance;
+    const centers = {}; // compId -> {x,y,count}
+    for (let i = 0; i < nodes.length; i++) {
+      const n = nodes[i];
+      if (!n._visible) continue;
+      const c = centers[n._component] || (centers[n._component] = { x: 0, y: 0, count: 0 });
+      c.x += n.x; c.y += n.y; c.count++;
+    }
+    const ids = Object.keys(centers);
+    ids.forEach(function (id) { centers[id].x /= centers[id].count; centers[id].y /= centers[id].count; });
+
+    for (let i = 0; i < ids.length; i++) {
+      let nearestDist = Infinity, nearestId = null;
+      const ci = centers[ids[i]];
+      for (let j = 0; j < ids.length; j++) {
+        if (i === j) continue;
+        const cj = centers[ids[j]];
+        const d = Math.hypot(cj.x - ci.x, cj.y - ci.y);
+        if (d < nearestDist) { nearestDist = d; nearestId = ids[j]; }
+      }
+      if (nearestId === null || nearestDist <= maxDist) continue;
+
+      // اسحب هذه الكتلة نحو أقرب كتلة أخرى فقط عندما تتجاوز الحد الأقصى المسموح
+      const cj = centers[nearestId];
+      const dx = cj.x - ci.x, dy = cj.y - ci.y;
+      const dist = Math.max(nearestDist, 0.001);
+      const excess = dist - maxDist;
+      const pullX = (dx / dist) * excess * CLUSTER_PULL_K * alpha;
+      const pullY = (dy / dist) * excess * CLUSTER_PULL_K * alpha;
+
+      for (let k = 0; k < nodes.length; k++) {
+        const n = nodes[k];
+        if (!n._visible || n._component !== Number(ids[i])) continue;
+        n.fx_ += pullX;
+        n.fy_ += pullY;
+      }
+    }
+  }
+
+  function integrate() {
+    for (let i = 0; i < nodes.length; i++) {
+      const n = nodes[i];
+      if (n.dragging) { n.vx = 0; n.vy = 0; continue; }
+      if (!n._visible) { n.vx = 0; n.vy = 0; continue; }
+
+      n.vx = (n.vx + n.fx_) * VELOCITY_DECAY;
+      n.vy = (n.vy + n.fy_) * VELOCITY_DECAY;
+
+      const speed = Math.hypot(n.vx, n.vy);
+      if (speed > MAX_VELOCITY) {
+        n.vx = (n.vx / speed) * MAX_VELOCITY;
+        n.vy = (n.vy / speed) * MAX_VELOCITY;
+      }
+
+      n.x += n.vx;
+      n.y += n.vy;
+    }
+    alpha += (0 - alpha) * ALPHA_DECAY;
+    if (alpha < ALPHA_MIN) alpha = ALPHA_MIN;
+  }
+
+  // ------------------------------------------------------------------
+  // الرسم
+  // ------------------------------------------------------------------
+  function resizeCanvas() {
+    dpr = window.devicePixelRatio || 1;
+    canvas.width = Math.floor(window.innerWidth * dpr);
+    canvas.height = Math.floor(window.innerHeight * dpr);
+    canvas.style.width = window.innerWidth + 'px';
+    canvas.style.height = window.innerHeight + 'px';
+  }
+
+  function drawArrowHead(fromX, fromY, toX, toY, nodeRadius) {
+    const angle = Math.atan2(toY - fromY, toX - fromX);
+    // نقطة رأس السهم عند حافة العقدة الهدف وليس مركزها
+    const tipX = toX - Math.cos(angle) * (nodeRadius + 2);
+    const tipY = toY - Math.sin(angle) * (nodeRadius + 2);
+    const size = 6.5;
+    const a1 = angle + Math.PI * 0.82;
+    const a2 = angle - Math.PI * 0.82;
+    ctx.beginPath();
+    ctx.moveTo(tipX, tipY);
+    ctx.lineTo(tipX + Math.cos(a1) * size, tipY + Math.sin(a1) * size);
+    ctx.lineTo(tipX + Math.cos(a2) * size, tipY + Math.sin(a2) * size);
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  function render() {
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
+    ctx.fillStyle = '#0a0e14';
+    ctx.fillRect(0, 0, window.innerWidth, window.innerHeight);
+
+    ctx.translate(view.offsetX, view.offsetY);
+    ctx.scale(view.scale, view.scale);
+
+    // الروابط (فقط بين العقد الظاهرة حاليًا حسب الفلتر)
+    ctx.strokeStyle = '#4b5563';
+    ctx.fillStyle = '#4b5563';
+    ctx.lineWidth = settings.linkWidth;
+    ctx.beginPath();
+    for (let k = 0; k < edges.length; k++) {
+      const e = edges[k];
+      const a = nodesById[e.source], b = nodesById[e.target];
+      if (!a._visible || !b._visible) continue;
+      ctx.moveTo(a.x, a.y);
+      ctx.lineTo(b.x, b.y);
+    }
+    ctx.stroke();
+
+    // رؤوس الأسهم (طبقة منفصلة بصريًا فقط، لا تؤثر على المحاكاة أو المواضع)
+    if (settings.showArrows) {
+      for (let k = 0; k < edges.length; k++) {
+        const e = edges[k];
+        const a = nodesById[e.source], b = nodesById[e.target];
+        if (!a._visible || !b._visible) continue;
+        if (e.direction === 'none') continue;
+        if (e.direction === 'backward') {
+          drawArrowHead(b.x, b.y, a.x, a.y, settings.nodeSize);
+        } else {
+          drawArrowHead(a.x, a.y, b.x, b.y, settings.nodeSize);
+        }
+      }
+    }
+
+    // شفافية النص حسب مستوى التكبير (تلاشي تدريجي، وليس اختفاءً مفاجئًا)
+    const fadeLimit = settings.labelFadeLimit;
+    const fadeStart = fadeLimit * 1.8; // بداية التلاشي قبل الوصول للحد الكامل
+    let labelAlpha;
+    if (view.scale >= fadeStart) labelAlpha = 1;
+    else if (view.scale <= fadeLimit) labelAlpha = 0;
+    else labelAlpha = (view.scale - fadeLimit) / (fadeStart - fadeLimit);
+
+    // العقد
+    for (let i = 0; i < nodes.length; i++) {
+      const n = nodes[i];
+      if (!n._visible) continue;
+      const isHub = n.degree >= HUB_DEGREE_THRESHOLD;
+      const fillColor = n._color || (isHub ? '#4ade80' : '#93a5c9');
+
+      ctx.beginPath();
+      ctx.fillStyle = fillColor;
+      ctx.arc(n.x, n.y, settings.nodeSize, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.lineWidth = 1;
+      ctx.strokeStyle = 'rgba(0,0,0,0.35)';
+      ctx.stroke();
+
+      // حرف مختصر داخل العقدة (أول حرف من عنوان الملاحظة الحقيقي) بدل معرّفها الرقمي،
+      // الذي لا فائدة بصرية من عرضه كاملاً داخل دائرة صغيرة
+      const glyph = (n.title || '').trim().charAt(0).toUpperCase();
+      if (glyph) {
+        ctx.fillStyle = '#0a0e14';
+        ctx.font = '600 ' + Math.max(9, settings.nodeSize) + 'px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(glyph, n.x, n.y + 1);
+      }
+
+      // اسم الملاحظة أسفل العقدة، بتلاشي تدريجي حسب مستوى التكبير
+      if (labelAlpha > 0.01) {
+        ctx.save();
+        ctx.globalAlpha = labelAlpha;
+        ctx.fillStyle = '#cbd5e1';
+        ctx.font = '500 11px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'top';
+        ctx.fillText(n.title, n.x, n.y + settings.nodeSize + 4);
+        ctx.restore();
+      }
+    }
+  }
+
+  function tick() {
+    if (alpha > ALPHA_MIN || anyDragging()) {
+      applyForces();
+      integrate();
+    }
+    render();
+    checkSettleAndSync();
+    requestAnimationFrame(tick);
+  }
+
+  // ------------------------------------------------------------------
+  // تحويل الإحداثيات
+  // ------------------------------------------------------------------
+  function screenToWorld(sx, sy) {
+    return {
+      x: (sx - view.offsetX) / view.scale,
+      y: (sy - view.offsetY) / view.scale
+    };
+  }
+
+  function getCanvasPos(clientX, clientY) {
+    const rect = canvas.getBoundingClientRect();
+    return { x: clientX - rect.left, y: clientY - rect.top };
+  }
+
+  function hitTestNode(worldX, worldY) {
+    const padding = Math.max(settings.nodeSize + 6, 16);
+    for (let i = nodes.length - 1; i >= 0; i--) {
+      const n = nodes[i];
+      if (!n._visible) continue;
+      const dx = n.x - worldX, dy = n.y - worldY;
+      if (Math.sqrt(dx * dx + dy * dy) <= padding) return n;
+    }
+    return null;
+  }
+
+  function zoomAt(sx, sy, factor) {
+    const newScale = clamp(view.scale * factor, MIN_SCALE, MAX_SCALE);
+    const w = screenToWorld(sx, sy);
+    view.offsetX = sx - w.x * newScale;
+    view.offsetY = sy - w.y * newScale;
+    view.scale = newScale;
+  }
+
+  function resetView() {
+    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+    let any = false;
+    for (let i = 0; i < nodes.length; i++) {
+      const n = nodes[i];
+      if (!n._visible) continue;
+      any = true;
+      if (n.x < minX) minX = n.x;
+      if (n.x > maxX) maxX = n.x;
+      if (n.y < minY) minY = n.y;
+      if (n.y > maxY) maxY = n.y;
+    }
+    if (!any) { minX = -100; maxX = 100; minY = -100; maxY = 100; }
+    const graphW = Math.max(maxX - minX, 50);
+    const graphH = Math.max(maxY - minY, 50);
+    const padding = 90;
+    const scaleX = (window.innerWidth - padding * 2) / graphW;
+    const scaleY = (window.innerHeight - padding * 2) / graphH;
+    const newScale = clamp(Math.min(scaleX, scaleY), MIN_SCALE, MAX_SCALE);
+    const cx = (minX + maxX) / 2, cy = (minY + maxY) / 2;
+
+    view.scale = newScale;
+    view.offsetX = window.innerWidth / 2 - cx * newScale;
+    view.offsetY = window.innerHeight / 2 - cy * newScale;
+  }
+
+  // ------------------------------------------------------------------
+  // أحداث الماوس
+  // ------------------------------------------------------------------
+  // يميّز "نقر حقيقي بلا حركة" عن "سحب" لفتح الملاحظة عند النقر فقط -
+  // مطلوب لأن hitTestNode وحده لا يفرّق بين الحالتين (spec section 8).
+  const TAP_MOVE_THRESHOLD = 6; // px بمقياس الشاشة
+  let pointerDownNode = null;
+  let pointerDownScreenX = 0, pointerDownScreenY = 0;
+  let pointerMoved = false;
+
+  canvas.addEventListener('mousedown', function (e) {
+    const p = getCanvasPos(e.clientX, e.clientY);
+    const w = screenToWorld(p.x, p.y);
+    const hit = hitTestNode(w.x, w.y);
+
+    pointerDownNode = hit;
+    pointerDownScreenX = p.x; pointerDownScreenY = p.y;
+    pointerMoved = false;
+
+    if (hit) {
+      draggingNode = hit;
+      hit.dragging = true;
+      canvas.classList.add('dragging');
+      reheat(0.5);
+    } else {
+      isPanning = true;
+      panStart = { sx: p.x, sy: p.y, ox: view.offsetX, oy: view.offsetY };
+      canvas.classList.add('dragging');
+    }
+  });
+
+  window.addEventListener('mousemove', function (e) {
+    const p = getCanvasPos(e.clientX, e.clientY);
+    if (!pointerMoved && Math.hypot(p.x - pointerDownScreenX, p.y - pointerDownScreenY) > TAP_MOVE_THRESHOLD) {
+      pointerMoved = true;
+    }
+    if (draggingNode) {
+      const w = screenToWorld(p.x, p.y);
+      draggingNode.x = w.x;
+      draggingNode.y = w.y;
+    } else if (isPanning && panStart) {
+      view.offsetX = panStart.ox + (p.x - panStart.sx);
+      view.offsetY = panStart.oy + (p.y - panStart.sy);
+    }
+  });
+
+  window.addEventListener('mouseup', function () {
+    if (draggingNode) {
+      draggingNode.dragging = false;
+      draggingNode = null;
+      reheat(0.3);
+      scheduleStateSync();
+    }
+    if (pointerDownNode && !pointerMoved) handleNodeActivated(pointerDownNode);
+    pointerDownNode = null;
+    isPanning = false;
+    panStart = null;
+    canvas.classList.remove('dragging');
+  });
+
+  canvas.addEventListener('wheel', function (e) {
+    e.preventDefault();
+    const p = getCanvasPos(e.clientX, e.clientY);
+    const factor = e.deltaY < 0 ? 1.12 : 1 / 1.12;
+    zoomAt(p.x, p.y, factor);
+  }, { passive: false });
+
+  // ------------------------------------------------------------------
+  // أحداث اللمس (للاستخدام على الجوال)
+  // ------------------------------------------------------------------
+  let pinchStartDist = null;
+  let pinchStartScale = null;
+
+  function touchDist(t1, t2) {
+    return Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
+  }
+  function touchMid(t1, t2, rect) {
+    return {
+      x: (t1.clientX + t2.clientX) / 2 - rect.left,
+      y: (t1.clientY + t2.clientY) / 2 - rect.top
+    };
+  }
+
+  canvas.addEventListener('touchstart', function (e) {
+    e.preventDefault();
+    if (e.touches.length === 1) {
+      const p = getCanvasPos(e.touches[0].clientX, e.touches[0].clientY);
+      const w = screenToWorld(p.x, p.y);
+      const hit = hitTestNode(w.x, w.y);
+      pointerDownNode = hit;
+      pointerDownScreenX = p.x; pointerDownScreenY = p.y;
+      pointerMoved = false;
+      if (hit) {
+        draggingNode = hit;
+        hit.dragging = true;
+        reheat(0.5);
+      } else {
+        isPanning = true;
+        panStart = { sx: p.x, sy: p.y, ox: view.offsetX, oy: view.offsetY };
+      }
+    } else if (e.touches.length === 2) {
+      draggingNode = null;
+      isPanning = false;
+      pointerDownNode = null;
+      pinchStartDist = touchDist(e.touches[0], e.touches[1]);
+      pinchStartScale = view.scale;
+    }
+  }, { passive: false });
+
+  canvas.addEventListener('touchmove', function (e) {
+    e.preventDefault();
+    if (e.touches.length === 1) {
+      const p = getCanvasPos(e.touches[0].clientX, e.touches[0].clientY);
+      if (!pointerMoved && Math.hypot(p.x - pointerDownScreenX, p.y - pointerDownScreenY) > TAP_MOVE_THRESHOLD) {
+        pointerMoved = true;
+      }
+      if (draggingNode) {
+        const w = screenToWorld(p.x, p.y);
+        draggingNode.x = w.x;
+        draggingNode.y = w.y;
+      } else if (isPanning && panStart) {
+        view.offsetX = panStart.ox + (p.x - panStart.sx);
+        view.offsetY = panStart.oy + (p.y - panStart.sy);
+      }
+    } else if (e.touches.length === 2 && pinchStartDist) {
+      const rect = canvas.getBoundingClientRect();
+      const newDist = touchDist(e.touches[0], e.touches[1]);
+      const mid = touchMid(e.touches[0], e.touches[1], rect);
+      const targetScale = clamp(pinchStartScale * (newDist / pinchStartDist), MIN_SCALE, MAX_SCALE);
+      const factor = targetScale / view.scale;
+      zoomAt(mid.x, mid.y, factor);
+    }
+  }, { passive: false });
+
+  canvas.addEventListener('touchend', function (e) {
+    if (draggingNode) {
+      draggingNode.dragging = false;
+      draggingNode = null;
+      reheat(0.3);
+      scheduleStateSync();
+    }
+    if (pointerDownNode && !pointerMoved) handleNodeActivated(pointerDownNode);
+    pointerDownNode = null;
+    isPanning = false;
+    panStart = null;
+    if (e.touches.length < 2) { pinchStartDist = null; pinchStartScale = null; }
+  });
+
+  // ==================================================================
+  // لوحة الإعدادات: قائمة منسدلة (أكورديون) - كل قسم يُفتح ويُغلق بشكل مستقل
+  // ==================================================================
+  const settingsPanel = document.getElementById('settingsPanel');
+  const panelBody = document.getElementById('panelBody');
+  const panelCloseBtn = document.getElementById('panelCloseBtn');
+
+  // حالة فتح/إغلاق كل قسم - يمكن فتح أكثر من قسم في نفس الوقت
+  const openSections = { filter: false, groups: false, display: false, forces: false };
+  let editingRuleId = null; // القاعدة الجارٍ تعديل لونها حاليًا في منتقي الألوان
+  let pickerHsv = { h: 0, s: 0, v: 0 }; // حالة منتقي الألوان المخصص المؤقتة
+
+  document.getElementById('settingsToggle').addEventListener('click', function () {
+    settingsPanel.classList.toggle('closed');
+  });
+  panelCloseBtn.addEventListener('click', function () {
+    settingsPanel.classList.add('closed');
+  });
+
+  function toggleSection(key) {
+    openSections[key] = !openSections[key];
+    if (!openSections[key] && key === 'groups') editingRuleId = null;
+    renderPanel();
+  }
+
+  function renderPanel() {
+    panelBody.innerHTML = renderAccordionHtml();
+    attachSectionHandlers();
+  }
+
+  // -------------------- القائمة المنسدلة الرئيسية --------------------
+  function renderAccordionHtml() {
+    return (
+      '<div class="menu-list">' +
+        accordionSectionHtml('filter', 'تصفية', renderFilterHtml) +
+        accordionSectionHtml('groups', 'المجموعات', renderGroupsHtml) +
+        accordionSectionHtml('display', 'العرض', renderDisplayHtml) +
+        accordionSectionHtml('forces', 'القوى', renderForcesHtml) +
+      '</div>'
+    );
+  }
+  function accordionSectionHtml(key, label, contentFn) {
+    const isOpen = !!openSections[key];
+    return (
+      '<div class="accordion-item' + (isOpen ? ' open' : '') + '">' +
+        '<div class="accordion-header" data-toggle-section="' + key + '">' +
+          '<span>' + label + '</span>' +
+          '<span class="arrow">' + (isOpen ? '⌄' : '‹') + '</span>' +
+        '</div>' +
+        (isOpen ? '<div class="accordion-body">' + contentFn() + '</div>' : '') +
+      '</div>'
+    );
+  }
+
+  // -------------------- قسم: تصفية --------------------
+  function renderFilterHtml() {
+    return (
+      '<label class="field-label">استعلام التصفية</label>' +
+      '<input type="text" class="text-input" id="filterQueryInput" placeholder="مثال: tag:programming أو path:Projects" ' +
+        'value="' + escapeAttr(filterState.query) + '">' +
+      '<div class="hint-text">أنواع مدعومة: path: · file: · tag: · line: · section: · [خاصية]:قيمة</div>' +
+
+      '<h4 class="section-label">إظهار العناصر</h4>' +
+      toggleRowHtml('filterShowTags', 'الوسوم', filterState.showTags) +
+      toggleRowHtml('filterShowAttachments', 'المرفقات', filterState.showAttachments) +
+      toggleRowHtml('filterOnlyExisting', 'الملفات الموجودة فقط', filterState.onlyExisting) +
+      toggleRowHtml('filterShowOrphans', 'الأيتام', filterState.showOrphans)
+    );
+  }
+
+  // -------------------- قسم: المجموعات --------------------
+  function renderGroupsHtml() {
+    if (editingRuleId !== null) return renderRuleEditorHtml();
+
+    let html = '';
+    if (groupRules.length === 0) {
+      html += '<div class="hint-text">لا توجد قواعد بعد. أضف قاعدة لتلوين العقد المطابقة تلقائيًا.</div>';
+    } else {
+      groupRules.forEach(function (rule) {
+        html +=
+          '<div class="rule-card" data-rule="' + rule.id + '">' +
+            '<div class="rule-card-top">' +
+              '<div class="rule-swatch" style="background:' + rule.color + '"></div>' +
+              '<div class="rule-query">' + escapeHtml(rule.query || '(فارغ)') + '</div>' +
+              '<button class="rule-del" data-del-rule="' + rule.id + '">×</button>' +
+            '</div>' +
+            '<div class="rule-edit-hint" data-edit-rule="' + rule.id + '" style="cursor:pointer;">تعديل ›</div>' +
+          '</div>';
+      });
+    }
+    html += '<button class="primary-btn" id="addRuleBtn">+ إضافة قاعدة جديدة</button>';
+    return html;
+  }
+
+  function renderRuleEditorHtml() {
+    const rule = groupRules.find(function (r) { return r.id === editingRuleId; }) ||
+      { id: editingRuleId, query: '', color: PRESET_COLORS[0] };
+    return (
+      '<label class="field-label">شرط القاعدة</label>' +
+      '<input type="text" class="text-input" id="ruleQueryInput" placeholder="مثال: tag:important" value="' + escapeAttr(rule.query) + '">' +
+      '<div class="hint-text">أنواع مدعومة: path: · file: · tag: · line: · section: · [خاصية]:قيمة</div>' +
+
+      '<label class="field-label">اللون</label>' +
+      renderColorPickerHtml(rule.color) +
+
+      '<div style="display:flex; gap:8px; margin-top:6px;">' +
+        '<button class="primary-btn" id="saveRuleBtn" style="margin-top:0;">حفظ</button>' +
+        '<button class="secondary-btn" id="cancelRuleBtn" style="margin-top:0;">إلغاء</button>' +
+      '</div>'
+    );
+  }
+
+  function renderColorPickerHtml(currentColor) {
+    let swatches = '';
+    PRESET_COLORS.forEach(function (c) {
+      const active = c.toLowerCase() === (currentColor || '').toLowerCase();
+      swatches += '<div class="swatch-btn' + (active ? ' active' : '') + '" style="background:' + c + '" data-preset="' + c + '"></div>';
+    });
+    swatches += '<div class="swatch-btn custom-trigger" id="customColorTrigger">+</div>';
+
+    const hsv = pickerHsv;
+    const hexNow = hsvToHex(hsv.h, hsv.s, hsv.v);
+    return (
+      '<div class="color-picker-wrap">' +
+        '<div class="swatch-grid">' + swatches + '</div>' +
+        '<div id="customPickerArea" style="display:none;">' +
+          '<div class="hsv-box" id="hsvBox" style="background: hsl(' + hsv.h + ', 100%, 50%);">' +
+            '<div class="sat-layer"></div><div class="val-layer"></div>' +
+            '<div class="hsv-cursor" id="hsvCursor" style="left:' + (hsv.s * 100) + '%; top:' + ((1 - hsv.v) * 100) + '%;"></div>' +
+          '</div>' +
+          '<input type="range" class="hue-slider" id="hueSlider" min="0" max="360" value="' + hsv.h + '">' +
+          '<div class="picker-preview-row">' +
+            '<div class="picker-preview" id="pickerPreview" style="background:' + hexNow + '"></div>' +
+            '<div class="picker-hex" id="pickerHex">' + hexNow + '</div>' +
+          '</div>' +
+          '<div class="picker-actions">' +
+            '<button class="btn-confirm" id="pickerConfirmBtn">تعيين</button>' +
+            '<button class="btn-cancel" id="pickerCancelBtn">إلغاء</button>' +
+          '</div>' +
+        '</div>' +
+        '<input type="hidden" id="selectedColorValue" value="' + currentColor + '">' +
+      '</div>'
+    );
+  }
+
+  // -------------------- قسم: العرض --------------------
+  function renderDisplayHtml() {
+    return (
+      toggleRowHtml('showArrows', 'الأسهم', settings.showArrows) +
+
+      '<div class="slider-row">' +
+        '<label><span>حد تلاشي النص</span><span class="val" id="val-labelFadeLimit">' + settings.labelFadeLimit.toFixed(2) + '</span></label>' +
+        '<input type="range" id="slider-labelFadeLimit" min="0.1" max="1.5" step="0.01" value="' + settings.labelFadeLimit + '">' +
+      '</div>' +
+
+      '<div class="slider-row">' +
+        '<label><span>حجم النقاط</span><span class="val" id="val-nodeSize">' + settings.nodeSize + ' px</span></label>' +
+        '<input type="range" id="slider-nodeSize" min="8" max="24" step="1" value="' + settings.nodeSize + '">' +
+      '</div>' +
+
+      '<div class="slider-row">' +
+        '<label><span>سمك الرابط</span><span class="val" id="val-linkWidth">' + settings.linkWidth + ' px</span></label>' +
+        '<input type="range" id="slider-linkWidth" min="1" max="6" step="0.5" value="' + settings.linkWidth + '">' +
+      '</div>' +
+
+      '<div class="slider-row">' +
+        '<label><span>أكبر مسافة ممكنة بين العقد</span><span class="val" id="val-maxClusterDistance">' + settings.maxClusterDistance + ' px</span></label>' +
+        '<input type="range" id="slider-maxClusterDistance" min="300" max="5000" step="10" value="' + settings.maxClusterDistance + '">' +
+      '</div>'
+    );
+  }
+
+  // -------------------- قسم: القوى --------------------
+  function renderForcesHtml() {
+    return (
+      '<div class="slider-row">' +
+        '<label><span>طول الرابطة</span><span class="val" id="val-linkDistance">' + settings.linkDistance + ' px</span></label>' +
+        '<input type="range" id="slider-linkDistance" min="16" max="300" step="1" value="' + settings.linkDistance + '">' +
+      '</div>' +
+      '<div class="slider-row">' +
+        '<label><span>قوة الرابطة</span><span class="val" id="val-linkStrength">' + settings.linkStrength.toFixed(2) + '</span></label>' +
+        '<input type="range" id="slider-linkStrength" min="0" max="1" step="0.01" value="' + settings.linkStrength + '">' +
+      '</div>' +
+      '<div class="slider-row">' +
+        '<label><span>قوة الصد</span><span class="val" id="val-repulsionDistance">' + settings.repulsionDistance + ' px</span></label>' +
+        '<input type="range" id="slider-repulsionDistance" min="16" max="300" step="1" value="' + settings.repulsionDistance + '">' +
+      '</div>' +
+      '<div class="slider-row">' +
+        '<label><span>قوة الوسط</span><span class="val" id="val-centerForce">' + settings.centerForce.toFixed(2) + '</span></label>' +
+        '<input type="range" id="slider-centerForce" min="0" max="1" step="0.01" value="' + settings.centerForce + '">' +
+      '</div>' +
+      '<div class="slider-row">' +
+        '<label><span>تأثير عدد العلاقات</span><span class="val" id="val-degreeInfluence">' + settings.degreeInfluence.toFixed(2) + '</span></label>' +
+        '<input type="range" id="slider-degreeInfluence" min="0" max="1" step="0.01" value="' + settings.degreeInfluence + '">' +
+      '</div>'
+    );
+  }
+
+  // -------------------- عناصر مشتركة --------------------
+  function toggleRowHtml(id, label, checked) {
+    return (
+      '<div class="toggle-row">' +
+        '<span>' + label + '</span>' +
+        '<label class="switch">' +
+          '<input type="checkbox" id="' + id + '"' + (checked ? ' checked' : '') + '>' +
+          '<span class="track"></span>' +
+        '</label>' +
+      '</div>'
+    );
+  }
+
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+  function escapeAttr(s) { return escapeHtml(s); }
+
+  // ------------------------------------------------------------------
+  // تحويل HSV → HEX
+  // ------------------------------------------------------------------
+  function hsvToHex(h, s, v) {
+    const c = v * s;
+    const x = c * (1 - Math.abs(((h / 60) % 2) - 1));
+    const m = v - c;
+    let r, g, b;
+    if (h < 60) { r = c; g = x; b = 0; }
+    else if (h < 120) { r = x; g = c; b = 0; }
+    else if (h < 180) { r = 0; g = c; b = x; }
+    else if (h < 240) { r = 0; g = x; b = c; }
+    else if (h < 300) { r = x; g = 0; b = c; }
+    else { r = c; g = 0; b = x; }
+    const toHex = function (n) {
+      const v255 = Math.round((n + m) * 255);
+      return v255.toString(16).padStart(2, '0');
+    };
+    return '#' + toHex(r) + toHex(g) + toHex(b);
+  }
+
+  function hexToHsv(hex) {
+    hex = hex.replace('#', '');
+    if (hex.length === 3) hex = hex.split('').map(function (c) { return c + c; }).join('');
+    const r = parseInt(hex.substr(0, 2), 16) / 255;
+    const g = parseInt(hex.substr(2, 2), 16) / 255;
+    const b = parseInt(hex.substr(4, 2), 16) / 255;
+    const max = Math.max(r, g, b), min = Math.min(r, g, b);
+    const d = max - min;
+    let h = 0;
+    if (d !== 0) {
+      if (max === r) h = 60 * (((g - b) / d) % 6);
+      else if (max === g) h = 60 * ((b - r) / d + 2);
+      else h = 60 * ((r - g) / d + 4);
+    }
+    if (h < 0) h += 360;
+    const s = max === 0 ? 0 : d / max;
+    const v = max;
+    return { h: h, s: s, v: v };
+  }
+
+  // ------------------------------------------------------------------
+  // ربط أحداث الأقسام (يُعاد استدعاؤها بعد كل renderPanel)
+  // ------------------------------------------------------------------
+  function attachSectionHandlers() {
+    // -------- فتح/إغلاق الأقسام --------
+    panelBody.querySelectorAll('[data-toggle-section]').forEach(function (el) {
+      el.addEventListener('click', function () { toggleSection(el.getAttribute('data-toggle-section')); });
+    });
+
+    // -------- تصفية --------
+    const filterQueryInput = document.getElementById('filterQueryInput');
+    if (filterQueryInput) {
+      filterQueryInput.addEventListener('input', function () {
+        filterState.query = filterQueryInput.value;
+        recomputeFilter();
+        reheat(0.6);
+      });
+    }
+    bindToggle('filterShowTags', function (val) { filterState.showTags = val; recomputeFilter(); reheat(0.6); });
+    bindToggle('filterShowAttachments', function (val) { filterState.showAttachments = val; recomputeFilter(); reheat(0.6); });
+    bindToggle('filterOnlyExisting', function (val) { filterState.onlyExisting = val; recomputeFilter(); reheat(0.6); });
+    bindToggle('filterShowOrphans', function (val) { filterState.showOrphans = val; recomputeFilter(); reheat(0.6); });
+
+    // -------- المجموعات: قائمة القواعد --------
+    const addRuleBtn = document.getElementById('addRuleBtn');
+    if (addRuleBtn) {
+      addRuleBtn.addEventListener('click', function () {
+        const id = 'g' + (ruleIdCounter++);
+        editingRuleId = id;
+        pickerHsv = hexToHsv(PRESET_COLORS[0]);
+        renderPanel();
+      });
+    }
+    panelBody.querySelectorAll('[data-edit-rule]').forEach(function (el) {
+      el.addEventListener('click', function () {
+        const id = el.getAttribute('data-edit-rule');
+        const rule = groupRules.find(function (r) { return r.id === id; });
+        editingRuleId = id;
+        pickerHsv = hexToHsv(rule ? rule.color : PRESET_COLORS[0]);
+        renderPanel();
+      });
+    });
+    panelBody.querySelectorAll('[data-del-rule]').forEach(function (el) {
+      el.addEventListener('click', function (evt) {
+        evt.stopPropagation();
+        const id = el.getAttribute('data-del-rule');
+        groupRules = groupRules.filter(function (r) { return r.id !== id; });
+        recomputeGroupColors();
+        renderPanel();
+      });
+    });
+
+    // -------- محرر القاعدة + منتقي الألوان --------
+    const ruleQueryInput = document.getElementById('ruleQueryInput');
+    const saveRuleBtn = document.getElementById('saveRuleBtn');
+    const cancelRuleBtn = document.getElementById('cancelRuleBtn');
+    if (saveRuleBtn) {
+      saveRuleBtn.addEventListener('click', function () {
+        const query = ruleQueryInput ? ruleQueryInput.value.trim() : '';
+        const colorInput = document.getElementById('selectedColorValue');
+        const color = colorInput ? colorInput.value : PRESET_COLORS[0];
+        const existing = groupRules.find(function (r) { return r.id === editingRuleId; });
+        if (existing) {
+          existing.query = query;
+          existing.color = color;
+        } else {
+          groupRules.push({ id: editingRuleId, query: query, color: color });
+        }
+        editingRuleId = null;
+        recomputeGroupColors();
+        renderPanel();
+      });
+    }
+    if (cancelRuleBtn) {
+      cancelRuleBtn.addEventListener('click', function () {
+        editingRuleId = null;
+        renderPanel();
+      });
+    }
+    attachColorPickerHandlers();
+
+    // -------- العرض --------
+    bindToggle('showArrows', function (val) { settings.showArrows = val; });
+    bindSlider('labelFadeLimit', false, '');
+    bindSlider('nodeSize', true, 'px');
+    bindSlider('linkWidth', false, 'px');
+    bindSlider('maxClusterDistance', true, 'px');
+
+    // -------- القوى --------
+    bindSlider('linkDistance', true, 'px', true);
+    bindSlider('linkStrength', false, '', true);
+    bindSlider('repulsionDistance', true, 'px', true);
+    bindSlider('centerForce', false, '', true);
+    bindSlider('degreeInfluence', false, '', true);
+  }
+
+  function bindToggle(id, onChange) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.addEventListener('change', function () { onChange(el.checked); });
+  }
+
+  function bindSlider(key, isInt, unit, isPhysics) {
+    const slider = document.getElementById('slider-' + key);
+    const valEl = document.getElementById('val-' + key);
+    if (!slider) return;
+    slider.addEventListener('input', function () {
+      const v = parseFloat(slider.value);
+      settings[key] = v;
+      if (valEl) valEl.textContent = (isInt ? Math.round(v) : v.toFixed(2)) + (unit ? ' ' + unit : '');
+      if (isPhysics) reheat(0.5);
+    });
+  }
+
+  function attachColorPickerHandlers() {
+    const wrap = panelBody.querySelector('.color-picker-wrap');
+    if (!wrap) return;
+
+    const customArea = document.getElementById('customPickerArea');
+    const hiddenInput = document.getElementById('selectedColorValue');
+    const previewEl = document.getElementById('pickerPreview');
+    const hexEl = document.getElementById('pickerHex');
+    const hsvBox = document.getElementById('hsvBox');
+    const hsvCursor = document.getElementById('hsvCursor');
+    const hueSlider = document.getElementById('hueSlider');
+
+    wrap.querySelectorAll('[data-preset]').forEach(function (el) {
+      el.addEventListener('click', function () {
+        const color = el.getAttribute('data-preset');
+        hiddenInput.value = color;
+        wrap.querySelectorAll('.swatch-btn').forEach(function (s) { s.classList.remove('active'); });
+        el.classList.add('active');
+        if (customArea) customArea.style.display = 'none';
+      });
+    });
+
+    const customTrigger = document.getElementById('customColorTrigger');
+    if (customTrigger) {
+      customTrigger.addEventListener('click', function () {
+        customArea.style.display = customArea.style.display === 'none' ? 'block' : 'none';
+      });
+    }
+
+    function updatePickerVisual() {
+      const hex = hsvToHex(pickerHsv.h, pickerHsv.s, pickerHsv.v);
+      if (hsvBox) hsvBox.style.background = 'hsl(' + pickerHsv.h + ', 100%, 50%)';
+      if (hsvCursor) {
+        hsvCursor.style.left = (pickerHsv.s * 100) + '%';
+        hsvCursor.style.top = ((1 - pickerHsv.v) * 100) + '%';
+      }
+      if (previewEl) previewEl.style.background = hex;
+      if (hexEl) hexEl.textContent = hex;
+    }
+
+    if (hueSlider) {
+      hueSlider.addEventListener('input', function () {
+        pickerHsv.h = parseFloat(hueSlider.value);
+        updatePickerVisual();
+      });
+    }
+
+    if (hsvBox) {
+      let dragging = false;
+      function setFromEvent(clientX, clientY) {
+        const rect = hsvBox.getBoundingClientRect();
+        const s = clamp((clientX - rect.left) / rect.width, 0, 1);
+        const v = clamp(1 - (clientY - rect.top) / rect.height, 0, 1);
+        pickerHsv.s = s; pickerHsv.v = v;
+        updatePickerVisual();
+      }
+      hsvBox.addEventListener('mousedown', function (e) { dragging = true; setFromEvent(e.clientX, e.clientY); });
+      window.addEventListener('mousemove', function (e) { if (dragging) setFromEvent(e.clientX, e.clientY); });
+      window.addEventListener('mouseup', function () { dragging = false; });
+      hsvBox.addEventListener('touchstart', function (e) { dragging = true; setFromEvent(e.touches[0].clientX, e.touches[0].clientY); }, { passive: true });
+      hsvBox.addEventListener('touchmove', function (e) { if (dragging) setFromEvent(e.touches[0].clientX, e.touches[0].clientY); }, { passive: true });
+      hsvBox.addEventListener('touchend', function () { dragging = false; });
+    }
+
+    const confirmBtn = document.getElementById('pickerConfirmBtn');
+    const cancelBtn = document.getElementById('pickerCancelBtn');
+    if (confirmBtn) {
+      confirmBtn.addEventListener('click', function () {
+        const hex = hsvToHex(pickerHsv.h, pickerHsv.s, pickerHsv.v);
+        hiddenInput.value = hex;
+        wrap.querySelectorAll('.swatch-btn').forEach(function (s) { s.classList.remove('active'); });
+        customArea.style.display = 'none';
+      });
+    }
+    if (cancelBtn) {
+      cancelBtn.addEventListener('click', function () {
+        customArea.style.display = 'none';
+      });
+    }
+  }
+
+  // ==================================================================
+  // الجسر مع Kotlin/Android
+  // ==================================================================
+  // Kotlin هو مصدر الحقيقة للبيانات والإعدادات المحفوظة؛ هذا الجسر فقط
+  // يستقبل البيانات ويطبّقها، ويُبلغ Kotlin بأي تغيير يحتاج حفظًا دائمًا
+  // أو فتح ملاحظة. لا يُستخدم أي تخزين محلي (localStorage) في هذا الملف.
+
+  let hasReceivedFirstData = false;
+
+  /** ينادي دالة Android الجسر بأمان - لا يفعل شيئًا إن كانت الصفحة تُعرض خارج WebView (مثل المعاينة أثناء التطوير). */
+  function callAndroid(method, arg) {
+    if (window.Android && typeof window.Android[method] === 'function') {
+      try { window.Android[method](arg); } catch (err) { /* تجاهل بأمان */ }
+    }
+  }
+
+  // -------- إرسال حالة الرسم إلى Kotlin ليحفظها (بشكل مُهدَّأ/debounced) --------
+  let stateChangeTimer = null;
+  function scheduleStateSync() {
+    if (stateChangeTimer) clearTimeout(stateChangeTimer);
+    stateChangeTimer = setTimeout(sendStateToAndroid, 400);
+  }
+  function sendStateToAndroid() {
+    const positions = {};
+    nodes.forEach(function (n) { positions[n.id] = { x: n.x, y: n.y }; });
+    const payload = {
+      settings: settings,
+      filterState: filterState,
+      groupRules: groupRules,
+      positions: positions,
+      view: { scale: view.scale, offsetX: view.offsetX, offsetY: view.offsetY }
+    };
+    callAndroid('onGraphStateChanged', JSON.stringify(payload));
+  }
+
+  // مواقع العقد تتغير باستمرار أثناء التشغيل الطبيعي للفيزياء أو السحب اليدوي؛
+  // نرسلها بشكل مُهدَّأ عند توقف الحركة فعليًا بدل كل إطار، حتى لا نُغرق الجسر
+  // برسائل لا داعي لها. نراقب alpha + السحب اليدوي لمعرفة متى "استقر" الرسم.
+  let wasSettling = true;
+  function checkSettleAndSync() {
+    const settling = alpha <= ALPHA_MIN && !anyDragging();
+    if (settling && !wasSettling) scheduleStateSync();
+    wasSettling = settling;
+  }
+
+  // -------- فتح الملاحظة الحقيقية عند نقر حقيقي (وليس سحب) على عقدة --------
+  function handleNodeActivated(node) {
+    if (!node || node.isGhost) return; // لا نفتح شيئًا لعقدة "شبح" (رابط غير محلول)
+    callAndroid('onNodeTapped', String(node.noteId != null ? node.noteId : node.id));
+  }
+
+  // -------- استقبال البيانات والإعدادات من Kotlin --------
+  window.NotesLinkGraph = {
+    /** يستقبل الملاحظات والروابط الحقيقية من Kotlin ويبني/يحدّث الرسم. */
+    loadData: function (jsonString) {
+      let data;
+      try { data = JSON.parse(jsonString); } catch (err) { return; }
+      buildGraphFromData(data);
+      renderPanel();
+      if (!hasReceivedFirstData) {
+        hasReceivedFirstData = true;
+        // أول تحميل فقط: إن لم تصل مواقع/عرض محفوظان مسبقًا من applySettings، اضبط العرض تلقائيًا
+        if (!data.positions || Object.keys(data.positions).length === 0) resetView();
+      }
+    },
+    /** يستقبل الإعدادات المحفوظة مسبقًا (عرض/قوى/فلترة/مجموعات/تكبير) ويطبّقها دون إعادة تشغيل الرسم بالكامل. */
+    applySettings: function (jsonString) {
+      let saved;
+      try { saved = JSON.parse(jsonString); } catch (err) { return; }
+      if (saved.settings) Object.assign(settings, saved.settings);
+      if (saved.filterState) Object.assign(filterState, saved.filterState);
+      if (Array.isArray(saved.groupRules)) {
+        groupRules = saved.groupRules;
+        let maxId = 0;
+        groupRules.forEach(function (r) {
+          const n = parseInt(String(r.id).replace(/[^0-9]/g, ''), 10);
+          if (!isNaN(n) && n >= maxId) maxId = n + 1;
+        });
+        ruleIdCounter = Math.max(ruleIdCounter, maxId);
+      }
+      if (saved.view) {
+        view.scale = saved.view.scale || view.scale;
+        view.offsetX = saved.view.offsetX || 0;
+        view.offsetY = saved.view.offsetY || 0;
+        hasReceivedFirstData = true; // عرض محفوظ متوفر - لا داعي لـ resetView التلقائي
+      }
+      recomputeDerivedState();
+      renderPanel();
+    }
+  };
+
+  // -------- ربط نقاط التغيير الموجودة أصلًا بمزامنة الحالة نحو Kotlin --------
+  // نلتف حول الدوال الحالية بدل تعديل كل موضع استدعاء لها على حدة، حفاظًا على
+  // الحد الأدنى من التعديلات على منطق الواجهة الأصلي.
+  const _origRecomputeFilter = recomputeFilter;
+  recomputeFilter = function () { _origRecomputeFilter(); scheduleStateSync(); };
+  const _origRecomputeGroupColors = recomputeGroupColors;
+  recomputeGroupColors = function () { _origRecomputeGroupColors(); scheduleStateSync(); };
+
+  // ------------------------------------------------------------------
+  // بدء التشغيل
+  // ------------------------------------------------------------------
+  renderPanel();
+  window.addEventListener('resize', resizeCanvas);
+  resizeCanvas();
+  requestAnimationFrame(tick);
+
+  // إعلام Kotlin أن الصفحة جاهزة لاستقبال البيانات والإعدادات
+  callAndroid('onGraphReady', '');
+})();
+</script>
+
+</body>
+</html>

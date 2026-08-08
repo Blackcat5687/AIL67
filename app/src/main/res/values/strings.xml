@@ -1,0 +1,104 @@
+<resources>
+    <string name="app_name">ملاحظاتي</string>
+
+    <string name="hint_search">بحث في الملاحظات</string>
+    <string name="hint_title">العنوان</string>
+    <string name="hint_content">اكتب ملاحظتك… استخدم #وسم لربط الملاحظات ببعضها</string>
+    <string name="action_delete">حذف</string>
+    <string name="action_save">حفظ</string>
+    <string name="action_settings">الإعدادات</string>
+
+    <string name="settings_title">الإعدادات</string>
+    <string name="main_menu_title">القائمة</string>
+    <string name="settings_open_desc">النسخ الاحتياطي، الاستيراد، والمهملات</string>
+    <string name="settings_graph">العرض البياني</string>
+    <string name="settings_graph_desc">عرض الملاحظات المترابطة كشبكة</string>
+    <string name="settings_backup">إنشاء نسخة احتياطية</string>
+    <string name="settings_backup_desc">تصدير كل الملاحظات إلى ملف</string>
+    <string name="settings_restore">استيراد نسخة احتياطية</string>
+    <string name="settings_restore_desc">استرجاع الملاحظات من ملف نسخة احتياطية</string>
+
+    <string name="backup_success">تم إنشاء النسخة الاحتياطية بنجاح</string>
+    <string name="backup_failed">فشل إنشاء النسخة الاحتياطية</string>
+    <string name="restore_success">تم الاستيراد بنجاح</string>
+    <string name="restore_failed">فشل الاستيراد، تأكد أن الملف صحيح</string>
+    <string name="restore_choice_title">طريقة الاستيراد</string>
+    <string name="restore_merge">إضافة إلى الملاحظات الحالية</string>
+    <string name="restore_replace">استبدال كل الملاحظات الحالية</string>
+    <string name="cancel">إلغاء</string>
+
+    <string name="graph_title">العرض البياني</string>
+    <string name="graph_empty">أضف وسومًا مثل #عمل أو روابط [[مثل هذا]] داخل ملاحظاتك لتظهر هنا مترابطة</string>
+    <string name="graph_center_strength">قوة الوسط</string>
+    <string name="graph_repel_strength">قوة الصد</string>
+    <string name="graph_link_strength">قوة الرابط</string>
+    <string name="graph_link_distance">مسافة الرابط</string>
+    <string name="graph_arrows">الأسهم</string>
+    <string name="graph_fade_threshold">حد تلاشي النص</string>
+    <string name="graph_node_size">حجم الرأس</string>
+    <string name="graph_link_thickness">سمك الرابط</string>
+    <string name="graph_hide_orphans">أيتام</string>
+    <string name="graph_restart">تحريك</string>
+
+    <string name="action_pin">تثبيت</string>
+    <string name="action_unpin">إلغاء التثبيت</string>
+    <string name="action_archive">أرشفة</string>
+    <string name="action_unarchive">إلغاء الأرشفة</string>
+    <string name="delete_confirm_title">حذف الملاحظة؟</string>
+    <string name="delete_confirm_message">لا يمكن التراجع عن هذا الإجراء.</string>
+    <string name="delete_confirm_positive">حذف</string>
+
+    <string name="content_desc_menu">القائمة</string>
+    <string name="section_pinned">مثبتة</string>
+    <string name="section_others">أخرى</string>
+    <string name="content_desc_background_image">إضافة صورة خلفية</string>
+    <string name="content_desc_remove_background_image">إزالة صورة الخلفية</string>
+    <string name="content_desc_more_options">خيارات إضافية</string>
+    <string name="content_desc_note_style">تخصيص شكل الملاحظة</string>
+    <string name="content_desc_close_note">إغلاق</string>
+    <string name="note_created_label">أول مرة تم إنشاء الملاحظة</string>
+    <string name="note_updated_label">آخر مرة تم التعديل على الملاحظة</string>
+    <string name="style_sheet_color_label">اللون</string>
+    <string name="style_sheet_background_label">الخلفية</string>
+    <string name="content_desc_undo">تراجع</string>
+    <string name="content_desc_redo">إعادة</string>
+
+    <string name="settings_archive">الملاحظات المؤرشفة</string>
+    <string name="settings_archive_desc">عرض الملاحظات التي قمت بأرشفتها</string>
+    <string name="settings_labels">التصنيفات</string>
+    <string name="settings_labels_desc">إدارة تصنيفات الملاحظات</string>
+    <string name="archive_title">الأرشيف</string>
+    <string name="archive_empty">لا توجد ملاحظات مؤرشفة</string>
+
+    <string name="settings_trash">المهملات</string>
+    <string name="settings_trash_desc">الملاحظات المحذوفة خلال آخر 30 يومًا</string>
+    <string name="trash_title">المهملات</string>
+    <string name="trash_empty">المهملات فارغة</string>
+    <string name="trash_restore">استرجاع</string>
+    <string name="trash_delete_forever">حذف نهائي</string>
+    <string name="trash_delete_forever_confirm_title">حذف نهائي؟</string>
+    <string name="trash_delete_forever_confirm_message">لا يمكن التراجع عن هذا الإجراء، ستُحذف الملاحظة نهائيًا.</string>
+
+    <string name="labels_title">التصنيفات</string>
+    <string name="labels_new_hint">اسم تصنيف جديد</string>
+    <string name="labels_create">إنشاء</string>
+    <string name="labels_edit">تعديل</string>
+    <string name="labels_done">تم</string>
+    <string name="labels_delete_confirm">حذف هذا التصنيف من كل الملاحظات؟</string>
+    <string name="labels_assign_title">التصنيفات</string>
+    <string name="labels_empty">لا توجد تصنيفات بعد</string>
+
+    <string name="graph_filter">تصفية</string>
+    <string name="graph_groups">المجموعات</string>
+    <string name="graph_display">العرض</string>
+    <string name="graph_forces">القِوَى</string>
+    <string name="graph_search_hint">ابحث عن ملاحظات…</string>
+    <string name="graph_show_tags">وسوم</string>
+    <string name="graph_group_add">إضافة مجموعة</string>
+    <string name="graph_group_query_hint">وسم أو نص للتلوين</string>
+    <string name="graph_group_color_hint">اختر لونًا</string>
+    <string name="graph_show_ghosts">روابط غير موجودة (أشباح)</string>
+    <string name="graph_local_depth">عمق الرسم المحلي</string>
+    <string name="graph_local_mode">رسم محلي</string>
+    <string name="graph_back_to_global">العودة للرسم الكامل</string>
+</resources>
